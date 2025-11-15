@@ -43,15 +43,29 @@ void MyFirstPlugin::ProcessBlock(sample** inputs, sample** outputs, int nFrames)
   const double gain = GetParam(kGain)->Value() / 100.;
   const double drive = GetParam(kDrive)->Value() / 100.;
   const int nChans = NOutChansConnected();
+
+   // Drive -> Clipping-Level in dB (exponentielle Skalierung für natürliches Gefühl)
+  float maxClipDb = 0.0f;   // kein Clipping bei 0 dB
+  float minClipDb = -20.0f; // hartes Clipping bei 100% Drive
+  float clipDb = maxClipDb + (minClipDb - maxClipDb) * pow(drive, 2.0);
+
+
   double phase = 0.0;
+
+  float freq = 440.f;
+  float phaseInc = 2.0f * M_PI * freq / (float)GetSampleRate();
   
    for (int s = 0; s < nFrames; s++)
   {                                  // nFrames beschriebt die Anzahl Samples im aktuellen Audio-Block
 
-    float testSample = sinf(phase);
+    /* float testSample = sinf(phase);
     phase += 2.0f * M_PI * 440.0f / (float)GetSampleRate(); // 440 Hz Sinus
     if (phase > 2.0f * M_PI)
-      phase -= 2.0f * M_PI;
+      phase -= 2.0f * M_PI;*/
+
+    phase += phaseInc;
+    if (phase > 2.0f * M_PI) phase -= 2.0f * M_PI;
+    float testSample = 2.0f * fabs(phase / (2.0f * M_PI) - 0.5f) * 2.0f - 1.0f;
 
     for (int c = 0; c < nChans; c++) // nChans beschreibt die Anzahl der Kanäle
     {
@@ -64,13 +78,13 @@ void MyFirstPlugin::ProcessBlock(sample** inputs, sample** outputs, int nFrames)
       float db_sample = linearToDb(sample);
       DBGMSG("Sample in DB: %f\n", db_sample);
 
-      if (db_sample > -10.0)
+      if (db_sample > clipDb)
       {
-        db_sample = 10.0;
-        DBGMSG("signal clipped");
+        db_sample = clipDb;
+        DBGMSG("Signal clipped at %f dB\n", clipDb);
       }
 
-      outputs[c][s] = dbToLinear(db_sample);
+      outputs[c][s] = dbToLinear(db_sample, sample >= 0 ? 1.0f : -1.0f);
 
 
 
