@@ -21,10 +21,21 @@ MyFirstPlugin::MyFirstPlugin(const InstanceInfo& info) // Konstruktor
     const IRECT b = pGraphics->GetBounds();
     pGraphics->AttachControl(new ITextControl(b.GetMidVPadded(50), "Hello iPlug 2!", IText(50)));
     pGraphics->AttachControl(new IVKnobControl(b.GetCentredInside(100).GetVShifted(-100), kGain, "Gain"));
-    pGraphics->AttachControl(new IVKnobControl(b.GetCentredInside(100).GetVShifted(100), kDrive, "Drive"));
+    pGraphics->AttachControl(new IVKnobControl(b.GetCentredInside(100).GetVShifted(100), kDrive, "Clipping"));
   };
 #endif
 }
+
+// Linear → dB
+float linearToDb(float x)
+{
+  const float epsilon = 1e-20f; // verhindert log(0)
+  return 20.0f * std::log10f(std::max(std::abs(x), epsilon));
+}
+
+//dB → Linear (mit Vorzeichen)
+float dbToLinear(float dB, float originalSign = 1.0f) { return std::copysign(std::pow(10.0f, dB / 20.0f), originalSign); }
+
 
 #if IPLUG_DSP
 void MyFirstPlugin::ProcessBlock(sample** inputs, sample** outputs, int nFrames)
@@ -32,15 +43,40 @@ void MyFirstPlugin::ProcessBlock(sample** inputs, sample** outputs, int nFrames)
   const double gain = GetParam(kGain)->Value() / 100.;
   const double drive = GetParam(kDrive)->Value() / 100.;
   const int nChans = NOutChansConnected();
+  double phase = 0.0;
   
    for (int s = 0; s < nFrames; s++)
   {                                  // nFrames beschriebt die Anzahl Samples im aktuellen Audio-Block
+
+    float testSample = sinf(phase);
+    phase += 2.0f * M_PI * 440.0f / (float)GetSampleRate(); // 440 Hz Sinus
+    if (phase > 2.0f * M_PI)
+      phase -= 2.0f * M_PI;
+
     for (int c = 0; c < nChans; c++) // nChans beschreibt die Anzahl der Kanäle
     {
-      double sample = inputs[c][s];
+      // double sample = inputs[c][s];
+      double sample = testSample; // Ausgang = Testsignal
       sample *= gain;  // zuerst Gain
-      sample *= drive; // dann Drive (oder deine Distortion-Funktion)
-      outputs[c][s] = sample;
+      // sample *= drive; // dann Drive (oder deine Distortion-Funktion)
+      // outputs[c][s] = sample;
+
+      float db_sample = linearToDb(sample);
+      DBGMSG("Sample in DB: %f\n", db_sample);
+
+      if (db_sample > -10.0)
+      {
+        db_sample = 10.0;
+        DBGMSG("signal clipped");
+      }
+
+      outputs[c][s] = dbToLinear(db_sample);
+
+
+
+
+
+
     }
   }
 }
